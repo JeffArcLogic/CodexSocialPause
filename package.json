@@ -1,0 +1,26 @@
+{
+  "name": "codex-social-pause",
+  "description": "Pause distracting sites when Codex is waiting for you.",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "native:install": "node scripts/install-native-host.mjs",
+    "native:uninstall": "node scripts/uninstall-native-host.mjs",
+    "probe:codex": "node scripts/codex-status-probe.mjs",
+    "probe:codex:watch": "node scripts/codex-status-probe.mjs --watch",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "compile": "tsc --noEmit",
+    "postinstall": "wxt prepare"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "wxt": "^0.20.27"
+  }
+}

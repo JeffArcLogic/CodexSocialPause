@@ -1,0 +1,147 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #172033;
+  background-color: #f7f8fb;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 260px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+#app {
+  min-height: 100%;
+}
+
+.popup {
+  box-sizing: border-box;
+  display: grid;
+  gap: 16px;
+  width: 320px;
+  padding: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.status-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.status-row[hidden] {
+  display: none !important;
+}
+
+.status-row span,
+.field span {
+  color: #5a6577;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-row strong {
+  max-width: 170px;
+  color: #172033;
+  font-size: 14px;
+  text-align: right;
+  text-transform: capitalize;
+}
+
+.status-row strong.active {
+  color: #b42318;
+}
+
+.status-row strong.inactive {
+  color: #027a48;
+}
+
+.toggle,
+select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.toggle {
+  border: 0;
+  background: #172033;
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toggle[aria-pressed='true'] {
+  background: #b42318;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field[hidden] {
+  display: none !important;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.checkbox-field input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #172033;
+}
+
+select {
+  border: 1px solid #c8d0dc;
+  background: #ffffff;
+  color: #172033;
+  padding: 0 10px;
+}
+
+.toggle:focus-visible,
+select:focus-visible {
+  outline: 3px solid #8bb5ff;
+  outline-offset: 2px;
+}
