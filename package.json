@@ -12,6 +12,7 @@
     "build:firefox": "wxt build -b firefox",
     "native:install": "node scripts/install-native-host.mjs",
     "native:uninstall": "node scripts/uninstall-native-host.mjs",
+    "icons:generate": "node scripts/generate-icons.mjs",
     "probe:codex": "node scripts/codex-status-probe.mjs",
     "probe:codex:watch": "node scripts/codex-status-probe.mjs --watch",
     "zip": "wxt zip",
