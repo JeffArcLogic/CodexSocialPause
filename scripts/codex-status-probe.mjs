@@ -15,6 +15,8 @@ const STATUS = {
 const DEFAULT_IDLE_MS = 5 * 60 * 1000;
 const DEFAULT_INTERVAL_MS = 2 * 1000;
 const RECENT_ACTIVITY_GRACE_MS = 30 * 1000;
+const CODEX_APP_PROCESS_PATTERN =
+  'Codex|ChatGPT|com\\.openai\\.(codex|chatgpt)';
 
 const args = parseArgs(process.argv.slice(2));
 
@@ -297,7 +299,7 @@ function isPidLive(pid) {
 
 function findCodexAppProcesses() {
   try {
-    const output = execFileSync('pgrep', ['-fl', 'Codex|com.openai.codex'], {
+    const output = execFileSync('pgrep', ['-fl', CODEX_APP_PROCESS_PATTERN], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -370,7 +372,8 @@ function isWaitingOnUserEvent(event) {
       payload?.role === 'assistant' &&
       payload?.phase === 'final_answer') ||
     (payload?.type === 'agent_message' && payload?.phase === 'final_answer') ||
-    payload?.type === 'task_complete'
+    payload?.type === 'task_complete' ||
+    payload?.type === 'turn_aborted'
   );
 }
 
