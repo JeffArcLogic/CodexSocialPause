@@ -14,9 +14,8 @@ const STATUS = {
 
 const DEFAULT_IDLE_MS = 5 * 60 * 1000;
 const DEFAULT_INTERVAL_MS = 2 * 1000;
-const RECENT_ACTIVITY_GRACE_MS = 30 * 1000;
 const CODEX_APP_PROCESS_PATTERN =
-  'Codex|ChatGPT|com\\.openai\\.(codex|chatgpt)';
+  /^\s*\d+\s+\/Applications\/(Codex|ChatGPT)\.app\/Contents\/MacOS\/(Codex|ChatGPT)( |$)/;
 
 const args = parseArgs(process.argv.slice(2));
 
@@ -196,10 +195,7 @@ function detectStatus() {
     };
   }
 
-  const hasRecentActivity =
-    activityAgeMs !== undefined && activityAgeMs <= RECENT_ACTIVITY_GRACE_MS;
-
-  if (!processInfo.hasLiveProcess && !hasRecentActivity) {
+  if (!processInfo.hasLiveProcess) {
     return {
       ...base,
       status: STATUS.DISCONNECTED,
@@ -233,10 +229,8 @@ function detectStatus() {
 
   return {
     ...base,
-    status: processInfo.hasLiveProcess ? STATUS.WORKING : STATUS.IDLE,
-    reason: processInfo.hasLiveProcess
-      ? 'codex_process_present'
-      : 'recent_codex_activity_without_live_process',
+    status: STATUS.WORKING,
+    reason: 'codex_process_present',
   };
 }
 
@@ -299,7 +293,7 @@ function isPidLive(pid) {
 
 function findCodexAppProcesses() {
   try {
-    const output = execFileSync('pgrep', ['-fl', CODEX_APP_PROCESS_PATTERN], {
+    const output = execFileSync('ps', ['-axo', 'pid=,args='], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -308,9 +302,7 @@ function findCodexAppProcesses() {
       .trim()
       .split('\n')
       .map((line) => line.trim())
-      .filter(Boolean)
-      .filter((line) => !line.includes('codex-status-probe.mjs'))
-      .filter((line) => !line.includes('pgrep'))
+      .filter((line) => CODEX_APP_PROCESS_PATTERN.test(line))
       .slice(0, 20);
   } catch {
     return [];
