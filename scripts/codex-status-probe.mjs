@@ -5,6 +5,12 @@ import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+import {
+  TURN_STATE,
+  getTurnState,
+  isWaitingOnUserEvent,
+} from './codex-session-state.mjs';
+
 const STATUS = {
   WORKING: 'working',
   WAITING_ON_USER: 'waiting_on_user',
@@ -144,6 +150,7 @@ function compactSnapshot(snapshot) {
     latestEventRole: latestEvent?.payloadRole,
     latestEventStatus: latestEvent?.payloadStatus,
     latestToolName: latestEvent?.payloadName,
+    turnState: snapshot.latestSession?.turnState,
     sessionFile: snapshot.latestSession?.source
       ? basename(snapshot.latestSession.source)
       : undefined,
@@ -160,6 +167,7 @@ function compactSignature(output) {
     output.latestEventRole,
     output.latestEventStatus,
     output.latestToolName,
+    output.turnState,
     output.sessionFile,
   ].join('|');
 }
@@ -200,6 +208,14 @@ function detectStatus() {
       ...base,
       status: STATUS.DISCONNECTED,
       reason: 'no_active_codex_process',
+    };
+  }
+
+  if (latestSession?.turnState === TURN_STATE.ACTIVE) {
+    return {
+      ...base,
+      status: STATUS.WORKING,
+      reason: 'task_in_progress',
     };
   }
 
@@ -318,13 +334,16 @@ function getLatestSessionInfo() {
   }
 
   const fileStat = safeStat(filePath);
-  const lastEvent = readLastJsonLine(filePath);
+  const events = readSessionTail(filePath);
+  const lastEvent = events.at(-1);
+  const turnState = getTurnState(events);
   const lastEventMs = Date.parse(lastEvent?.timestamp ?? '');
 
   return {
     mtimeMs: fileStat?.mtimeMs,
     lastEventMs: Number.isFinite(lastEventMs) ? lastEventMs : undefined,
     lastEvent,
+    turnState,
     summary: {
       source: filePath,
       modifiedAt: fileStat ? fileStat.mtime.toISOString() : undefined,
@@ -333,6 +352,7 @@ function getLatestSessionInfo() {
           ? new Date(lastEventMs).toISOString()
           : undefined,
       lastEvent: summarizeEvent(lastEvent),
+      turnState,
     },
   };
 }
@@ -354,19 +374,6 @@ function getLatestLogInfo() {
       modifiedAt: fileStat ? fileStat.mtime.toISOString() : undefined,
     },
   };
-}
-
-function isWaitingOnUserEvent(event) {
-  const payload = event?.payload;
-
-  return (
-    (payload?.type === 'message' &&
-      payload?.role === 'assistant' &&
-      payload?.phase === 'final_answer') ||
-    (payload?.type === 'agent_message' && payload?.phase === 'final_answer') ||
-    payload?.type === 'task_complete' ||
-    payload?.type === 'turn_aborted'
-  );
 }
 
 function isRecentWorkingActivity(event, activityAgeMs) {
@@ -429,9 +436,10 @@ function readJson(filePath) {
   }
 }
 
-function readLastJsonLine(filePath) {
+function readSessionTail(filePath) {
   try {
     const lines = readFileSync(filePath, 'utf8').trimEnd().split('\n');
+    const events = [];
 
     for (let index = lines.length - 1; index >= 0; index -= 1) {
       const line = lines[index]?.trim();
@@ -440,13 +448,21 @@ function readLastJsonLine(filePath) {
         continue;
       }
 
-      return JSON.parse(line);
-    }
-  } catch {
-    return undefined;
-  }
+      try {
+        events.unshift(JSON.parse(line));
+      } catch {
+        continue;
+      }
 
-  return undefined;
+      if (getTurnState(events) !== TURN_STATE.UNKNOWN) {
+        break;
+      }
+    }
+
+    return events;
+  } catch {
+    return [];
+  }
 }
 
 function findLatestFile(root, predicate) {

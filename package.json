@@ -15,6 +15,7 @@
     "icons:generate": "node scripts/generate-icons.mjs",
     "probe:codex": "node scripts/codex-status-probe.mjs",
     "probe:codex:watch": "node scripts/codex-status-probe.mjs --watch",
+    "test": "node --test scripts/*.test.mjs",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
