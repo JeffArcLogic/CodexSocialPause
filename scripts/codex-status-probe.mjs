@@ -7,6 +7,8 @@ import { execFileSync } from 'node:child_process';
 
 import {
   TURN_STATE,
+  createBlockingStatusStabilizer,
+  getAggregateTurnState,
   getTurnState,
   isWaitingOnUserEvent,
 } from './codex-session-state.mjs';
@@ -20,6 +22,7 @@ const STATUS = {
 
 const DEFAULT_IDLE_MS = 5 * 60 * 1000;
 const DEFAULT_INTERVAL_MS = 2 * 1000;
+const BLOCKING_CONFIRMATION_MS = 4 * 1000;
 const CODEX_APP_PROCESS_PATTERN =
   /^\s*\d+\s+\/Applications\/(Codex|ChatGPT)\.app\/Contents\/MacOS\/(Codex|ChatGPT)( |$)/;
 
@@ -32,6 +35,9 @@ const idleMs = args.idleMs ?? DEFAULT_IDLE_MS;
 const intervalMs = args.intervalMs ?? DEFAULT_INTERVAL_MS;
 
 let lastPrintedSignature;
+const stabilizeStatus = createBlockingStatusStabilizer(
+  BLOCKING_CONFIRMATION_MS,
+);
 
 if (args.watch) {
   printStatus(true);
@@ -123,7 +129,10 @@ Options:
 }
 
 function printStatus(force) {
-  const snapshot = detectStatus();
+  const detectedSnapshot = detectStatus();
+  const snapshot = args.watch
+    ? stabilizeStatus(detectedSnapshot)
+    : detectedSnapshot;
   const output = args.verbose ? snapshot : compactSnapshot(snapshot);
   const signature = args.verbose
     ? JSON.stringify(output)
@@ -175,7 +184,12 @@ function compactSignature(output) {
 function detectStatus() {
   const now = Date.now();
   const processInfo = getCodexProcessInfo();
-  const latestSession = getLatestSessionInfo();
+  const sessions = getRecentSessionInfos(now);
+  const latestSession = sessions.at(0);
+  const activeSession = sessions.find(
+    (session) => session.turnState === TURN_STATE.ACTIVE,
+  );
+  const aggregateTurnState = getAggregateTurnState(sessions);
   const latestLog = getLatestLogInfo();
   const latestActivityMs = Math.max(
     latestSession?.mtimeMs ?? 0,
@@ -191,6 +205,8 @@ function detectStatus() {
     logsDir,
     process: processInfo.summary,
     latestSession: latestSession?.summary,
+    activeSession: activeSession?.summary,
+    relevantSessionCount: sessions.length,
     latestLog: latestLog?.summary,
     idleMs,
   };
@@ -211,11 +227,14 @@ function detectStatus() {
     };
   }
 
-  if (latestSession?.turnState === TURN_STATE.ACTIVE) {
+  if (aggregateTurnState === TURN_STATE.ACTIVE) {
     return {
       ...base,
       status: STATUS.WORKING,
-      reason: 'task_in_progress',
+      reason:
+        activeSession === latestSession
+          ? 'task_in_progress'
+          : 'another_task_in_progress',
     };
   }
 
@@ -325,14 +344,18 @@ function findCodexAppProcesses() {
   }
 }
 
-function getLatestSessionInfo() {
+function getRecentSessionInfos(nowMs) {
   const sessionsDir = join(codexDir, 'sessions');
-  const filePath = findLatestFile(sessionsDir, (name) => name.endsWith('.jsonl'));
+  const files = findLatestFiles(
+    sessionsDir,
+    (name) => name.endsWith('.jsonl'),
+    nowMs - idleMs,
+  );
 
-  if (!filePath) {
-    return undefined;
-  }
+  return files.map(({ path: filePath }) => getSessionInfo(filePath));
+}
 
+function getSessionInfo(filePath) {
   const fileStat = safeStat(filePath);
   const events = readSessionTail(filePath);
   const lastEvent = events.at(-1);
@@ -358,7 +381,9 @@ function getLatestSessionInfo() {
 }
 
 function getLatestLogInfo() {
-  const filePath = findLatestFile(logsDir, (name) => name.endsWith('.log'));
+  const filePath = findLatestFiles(logsDir, (name) => name.endsWith('.log')).at(
+    0,
+  )?.path;
 
   if (!filePath) {
     return undefined;
@@ -465,11 +490,20 @@ function readSessionTail(filePath) {
   }
 }
 
-function findLatestFile(root, predicate) {
+function findLatestFiles(
+  root,
+  predicate,
+  recentAfterMs = Number.POSITIVE_INFINITY,
+) {
+  const matches = [];
   let latest;
 
   visit(root);
-  return latest?.path;
+  if (latest && !matches.some((match) => match.path === latest.path)) {
+    matches.push(latest);
+  }
+
+  return matches.sort((left, right) => right.mtimeMs - left.mtimeMs);
 
   function visit(dir) {
     let entries;
@@ -503,6 +537,13 @@ function findLatestFile(root, predicate) {
           path: fullPath,
           mtimeMs: fileStat.mtimeMs,
         };
+      }
+
+      if (fileStat.mtimeMs >= recentAfterMs) {
+        matches.push({
+          path: fullPath,
+          mtimeMs: fileStat.mtimeMs,
+        });
       }
     }
   }

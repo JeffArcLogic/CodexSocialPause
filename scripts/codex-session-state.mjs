@@ -25,3 +25,60 @@ export function isWaitingOnUserEvent(event) {
 
   return payloadType === 'task_complete' || payloadType === 'turn_aborted';
 }
+
+export function getAggregateTurnState(sessions) {
+  if (sessions.some((session) => session.turnState === TURN_STATE.ACTIVE)) {
+    return TURN_STATE.ACTIVE;
+  }
+
+  if (sessions.some((session) => session.turnState === TURN_STATE.COMPLETE)) {
+    return TURN_STATE.COMPLETE;
+  }
+
+  return TURN_STATE.UNKNOWN;
+}
+
+export function createBlockingStatusStabilizer(confirmationMs) {
+  let stableSnapshot;
+  let candidateStatus;
+  let candidateSinceMs;
+
+  return (snapshot, nowMs = Date.now()) => {
+    if (!stableSnapshot) {
+      stableSnapshot = snapshot;
+      return snapshot;
+    }
+
+    const isBlocking =
+      snapshot.status === 'waiting_on_user' || snapshot.status === 'idle';
+    const stableIsBlocking =
+      stableSnapshot.status === 'waiting_on_user' ||
+      stableSnapshot.status === 'idle';
+
+    if (!isBlocking || stableIsBlocking) {
+      candidateStatus = undefined;
+      candidateSinceMs = undefined;
+      stableSnapshot = snapshot;
+      return snapshot;
+    }
+
+    if (candidateStatus !== snapshot.status) {
+      candidateStatus = snapshot.status;
+      candidateSinceMs = nowMs;
+    }
+
+    if (nowMs - candidateSinceMs >= confirmationMs) {
+      candidateStatus = undefined;
+      candidateSinceMs = undefined;
+      stableSnapshot = snapshot;
+      return snapshot;
+    }
+
+    return {
+      ...snapshot,
+      status: stableSnapshot.status,
+      reason: `confirming_${snapshot.status}`,
+      candidateStatus: snapshot.status,
+    };
+  };
+}

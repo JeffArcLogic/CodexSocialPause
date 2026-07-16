@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 let stdoutQueue = Promise.resolve();
+let shuttingDown = false;
 
 const probe = spawn(
   process.execPath,
@@ -82,6 +83,8 @@ process.on('SIGINT', () => {
   probe.kill('SIGINT');
 });
 
+process.stdout.on('error', handleOutputError);
+
 function sendNativeMessage(message) {
   stdoutQueue = stdoutQueue.then(
     () =>
@@ -99,7 +102,17 @@ function sendNativeMessage(message) {
           resolve();
         });
       }),
-  );
+  ).catch(handleOutputError);
 
   return stdoutQueue;
+}
+
+function handleOutputError(error) {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
+  probe.kill('SIGTERM');
+  process.exit(error?.code === 'EPIPE' ? 0 : 1);
 }

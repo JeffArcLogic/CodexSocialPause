@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
   TURN_STATE,
+  createBlockingStatusStabilizer,
+  getAggregateTurnState,
   getTurnState,
   isWaitingOnUserEvent,
 } from './codex-session-state.mjs';
@@ -53,5 +55,47 @@ test('a newly started task supersedes the prior completion', () => {
       event('task_started'),
     ]),
     TURN_STATE.ACTIVE,
+  );
+});
+
+test('an active session wins over a newer completed session', () => {
+  assert.equal(
+    getAggregateTurnState([
+      { turnState: TURN_STATE.COMPLETE },
+      { turnState: TURN_STATE.ACTIVE },
+    ]),
+    TURN_STATE.ACTIVE,
+  );
+});
+
+test('confirms a blocking transition for the configured duration', () => {
+  const stabilize = createBlockingStatusStabilizer(4_000);
+  const working = { status: 'working', reason: 'task_in_progress' };
+  const waiting = { status: 'waiting_on_user', reason: 'task_complete' };
+
+  assert.equal(stabilize(working, 1_000).status, 'working');
+
+  const firstCandidate = stabilize(waiting, 2_000);
+  assert.equal(firstCandidate.status, 'working');
+  assert.equal(firstCandidate.candidateStatus, 'waiting_on_user');
+
+  assert.equal(stabilize(waiting, 5_999).status, 'working');
+  assert.equal(stabilize(waiting, 6_000).status, 'waiting_on_user');
+});
+
+test('cancels a pending block as soon as work resumes', () => {
+  const stabilize = createBlockingStatusStabilizer(4_000);
+
+  stabilize({ status: 'working', reason: 'active' }, 1_000);
+  stabilize({ status: 'waiting_on_user', reason: 'complete' }, 2_000);
+
+  assert.equal(
+    stabilize({ status: 'working', reason: 'active' }, 3_000).status,
+    'working',
+  );
+  assert.equal(
+    stabilize({ status: 'waiting_on_user', reason: 'complete' }, 6_500)
+      .status,
+    'working',
   );
 });
