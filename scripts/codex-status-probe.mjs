@@ -10,6 +10,7 @@ import {
   createBlockingStatusStabilizer,
   getAggregateTurnState,
   getTurnState,
+  hasLiveCodexApp,
   isWaitingOnUserEvent,
 } from './codex-session-state.mjs';
 
@@ -273,7 +274,6 @@ function getCodexProcessInfo() {
   const filePath = join(codexDir, 'process_manager', 'chat_processes.json');
   const processes = readJson(filePath);
   const entries = Array.isArray(processes) ? processes : [];
-  const livePids = [];
   const trackedPids = [];
   const appProcesses = findCodexAppProcesses();
 
@@ -285,20 +285,15 @@ function getCodexProcessInfo() {
     }
 
     trackedPids.push(pid);
-
-    if (isPidLive(pid)) {
-      livePids.push(pid);
-    }
   }
 
   return {
-    hasLiveProcess: livePids.length > 0 || appProcesses.length > 0,
+    hasLiveProcess: hasLiveCodexApp({ appProcesses }),
     summary: {
       source: filePath,
       trackedCount: entries.length,
       trackedPidCount: trackedPids.length,
-      liveCount: livePids.length,
-      livePids,
+      trackedPidsAreDiagnosticOnly: true,
       appProcessCount: appProcesses.length,
       appProcesses,
     },
@@ -315,15 +310,6 @@ function readPid(entry) {
   }
 
   return undefined;
-}
-
-function isPidLive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error?.code === 'EPERM';
-  }
 }
 
 function findCodexAppProcesses() {

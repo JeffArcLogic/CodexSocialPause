@@ -38,6 +38,10 @@ export function getAggregateTurnState(sessions) {
   return TURN_STATE.UNKNOWN;
 }
 
+export function hasLiveCodexApp({ appProcesses }) {
+  return appProcesses.length > 0;
+}
+
 export function createBlockingStatusStabilizer(confirmationMs) {
   let stableSnapshot;
   let candidateStatus;

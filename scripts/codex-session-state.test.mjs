@@ -6,6 +6,7 @@ import {
   createBlockingStatusStabilizer,
   getAggregateTurnState,
   getTurnState,
+  hasLiveCodexApp,
   isWaitingOnUserEvent,
 } from './codex-session-state.mjs';
 
@@ -65,6 +66,22 @@ test('an active session wins over a newer completed session', () => {
       { turnState: TURN_STATE.ACTIVE },
     ]),
     TURN_STATE.ACTIVE,
+  );
+});
+
+test('historical tracked PIDs do not count as a live Codex app', () => {
+  assert.equal(
+    hasLiveCodexApp({ appProcesses: [], liveTrackedPids: [4904] }),
+    false,
+  );
+  assert.equal(
+    hasLiveCodexApp({
+      appProcesses: [
+        '62473 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT',
+      ],
+      liveTrackedPids: [],
+    }),
+    true,
   );
 });
 
