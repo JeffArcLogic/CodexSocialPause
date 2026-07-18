@@ -38,7 +38,10 @@ export function getAggregateTurnState(sessions) {
   return TURN_STATE.UNKNOWN;
 }
 
-export function getDesktopLogTurnStates(logTexts) {
+export function getDesktopLogTurnStates(
+  logTexts,
+  recentAfterMs = Number.NEGATIVE_INFINITY,
+) {
   const latestByConversation = new Map();
 
   for (const text of logTexts) {
@@ -46,6 +49,10 @@ export function getDesktopLogTurnStates(logTexts) {
       const signal = getDesktopLogTurnSignal(line);
 
       if (!signal) {
+        continue;
+      }
+
+      if (signal.timestampMs < recentAfterMs) {
         continue;
       }
 

@@ -191,7 +191,10 @@ function detectStatus() {
   const activeSession = sessions.find(
     (session) => session.turnState === TURN_STATE.ACTIVE,
   );
-  const desktopLog = getDesktopLogInfo();
+  const localConversationIds = new Set(
+    sessions.map((session) => session.conversationId).filter(Boolean),
+  );
+  const desktopLog = getDesktopLogInfo(now, localConversationIds);
   const aggregateTurnState = getAggregateTurnState([
     ...sessions,
     ...desktopLog.turnStates,
@@ -356,8 +359,12 @@ function getSessionInfo(filePath) {
   const lastEvent = events.at(-1);
   const turnState = getTurnState(events);
   const lastEventMs = Date.parse(lastEvent?.timestamp ?? '');
+  const conversationId = basename(filePath).match(
+    /([0-9a-f-]{36})\.jsonl$/,
+  )?.[1];
 
   return {
+    conversationId,
     mtimeMs: fileStat?.mtimeMs,
     lastEventMs: Number.isFinite(lastEventMs) ? lastEventMs : undefined,
     lastEvent,
@@ -375,7 +382,7 @@ function getSessionInfo(filePath) {
   };
 }
 
-function getDesktopLogInfo() {
+function getDesktopLogInfo(nowMs, localConversationIds) {
   const files = findLatestFiles(logsDir, (name) => name.endsWith('.log')).slice(
     0,
     8,
@@ -398,7 +405,9 @@ function getDesktopLogInfo() {
         modifiedAt: fileStat ? fileStat.mtime.toISOString() : undefined,
       },
     },
-    turnStates: getDesktopLogTurnStates(logTexts),
+    turnStates: getDesktopLogTurnStates(logTexts, nowMs - idleMs).filter(
+      (signal) => !localConversationIds.has(signal.conversationId),
+    ),
   };
 }
 

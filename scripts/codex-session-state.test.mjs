@@ -103,6 +103,18 @@ test('ignores desktop log bodies without a lifecycle signal', () => {
   );
 });
 
+test('expires desktop activity that has not been refreshed', () => {
+  const conversationId = '019f7392-475f-7d93-b0d6-c42e453fbe8b';
+  const states = getDesktopLogTurnStates(
+    [
+      `2026-07-18T23:39:22.238Z info Reasoning summary item completed threadId=${conversationId}`,
+    ],
+    Date.parse('2026-07-18T23:40:00.000Z'),
+  );
+
+  assert.deepEqual(states, []);
+});
+
 test('historical tracked PIDs do not count as a live Codex app', () => {
   assert.equal(
     hasLiveCodexApp({ appProcesses: [], liveTrackedPids: [4904] }),
