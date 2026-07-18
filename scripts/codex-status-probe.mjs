@@ -9,6 +9,7 @@ import {
   TURN_STATE,
   createBlockingStatusStabilizer,
   getAggregateTurnState,
+  getDesktopLogTurnStates,
   getTurnState,
   hasLiveCodexApp,
   isWaitingOnUserEvent,
@@ -190,8 +191,12 @@ function detectStatus() {
   const activeSession = sessions.find(
     (session) => session.turnState === TURN_STATE.ACTIVE,
   );
-  const aggregateTurnState = getAggregateTurnState(sessions);
-  const latestLog = getLatestLogInfo();
+  const desktopLog = getDesktopLogInfo();
+  const aggregateTurnState = getAggregateTurnState([
+    ...sessions,
+    ...desktopLog.turnStates,
+  ]);
+  const latestLog = desktopLog.latest;
   const latestActivityMs = Math.max(
     latestSession?.mtimeMs ?? 0,
     latestSession?.lastEventMs ?? 0,
@@ -209,6 +214,8 @@ function detectStatus() {
     activeSession: activeSession?.summary,
     relevantSessionCount: sessions.length,
     latestLog: latestLog?.summary,
+    desktopTurnState: getAggregateTurnState(desktopLog.turnStates),
+    desktopTurnSignalCount: desktopLog.turnStates.length,
     idleMs,
   };
 
@@ -233,9 +240,11 @@ function detectStatus() {
       ...base,
       status: STATUS.WORKING,
       reason:
-        activeSession === latestSession
+        activeSession && activeSession === latestSession
           ? 'task_in_progress'
-          : 'another_task_in_progress',
+          : activeSession
+            ? 'another_task_in_progress'
+            : 'desktop_task_in_progress',
     };
   }
 
@@ -366,24 +375,30 @@ function getSessionInfo(filePath) {
   };
 }
 
-function getLatestLogInfo() {
-  const filePath = findLatestFiles(logsDir, (name) => name.endsWith('.log')).at(
+function getDesktopLogInfo() {
+  const files = findLatestFiles(logsDir, (name) => name.endsWith('.log')).slice(
     0,
-  )?.path;
+    8,
+  );
+  const filePath = files.at(0)?.path;
 
   if (!filePath) {
-    return undefined;
+    return { latest: undefined, turnStates: [] };
   }
 
   const fileStat = safeStat(filePath);
+  const logTexts = files.map(({ path }) => readText(path));
 
   return {
-    mtimeMs: fileStat?.mtimeMs,
-    summary: {
-      source: filePath,
-      size: fileStat?.size,
-      modifiedAt: fileStat ? fileStat.mtime.toISOString() : undefined,
+    latest: {
+      mtimeMs: fileStat?.mtimeMs,
+      summary: {
+        source: filePath,
+        size: fileStat?.size,
+        modifiedAt: fileStat ? fileStat.mtime.toISOString() : undefined,
+      },
     },
+    turnStates: getDesktopLogTurnStates(logTexts),
   };
 }
 
@@ -444,6 +459,14 @@ function readJson(filePath) {
     return JSON.parse(readFileSync(filePath, 'utf8'));
   } catch {
     return undefined;
+  }
+}
+
+function readText(filePath) {
+  try {
+    return readFileSync(filePath, 'utf8');
+  } catch {
+    return '';
   }
 }
 

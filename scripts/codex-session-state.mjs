@@ -38,6 +38,67 @@ export function getAggregateTurnState(sessions) {
   return TURN_STATE.UNKNOWN;
 }
 
+export function getDesktopLogTurnStates(logTexts) {
+  const latestByConversation = new Map();
+
+  for (const text of logTexts) {
+    for (const line of text.split('\n')) {
+      const signal = getDesktopLogTurnSignal(line);
+
+      if (!signal) {
+        continue;
+      }
+
+      const previous = latestByConversation.get(signal.conversationId);
+
+      if (!previous || signal.timestampMs >= previous.timestampMs) {
+        latestByConversation.set(signal.conversationId, signal);
+      }
+    }
+  }
+
+  return [...latestByConversation.values()].sort(
+    (left, right) => right.timestampMs - left.timestampMs,
+  );
+}
+
+function getDesktopLogTurnSignal(line) {
+  let turnState;
+
+  if (
+    line.includes('Reasoning summary turn-start') ||
+    line.includes('Reasoning summary part added') ||
+    line.includes('Reasoning summary item completed') ||
+    (line.includes('response_routed') && line.includes('method=turn/start'))
+  ) {
+    turnState = TURN_STATE.ACTIVE;
+  } else if (
+    line.includes('[electron-message-handler]') &&
+    line.includes('[desktop-notifications] show turn-complete')
+  ) {
+    turnState = TURN_STATE.COMPLETE;
+  } else {
+    return undefined;
+  }
+
+  const timestamp = line.match(/^(\S+)/)?.[1];
+  const conversationId =
+    line.match(/\bconversationId=([0-9a-f-]{36})\b/)?.[1] ??
+    line.match(/\bthreadId=([0-9a-f-]{36})\b/)?.[1];
+  const timestampMs = Date.parse(timestamp ?? '');
+
+  if (!conversationId || !Number.isFinite(timestampMs)) {
+    return undefined;
+  }
+
+  return {
+    conversationId,
+    timestamp,
+    timestampMs,
+    turnState,
+  };
+}
+
 export function hasLiveCodexApp({ appProcesses }) {
   return appProcesses.length > 0;
 }

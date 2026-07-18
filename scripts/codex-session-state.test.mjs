@@ -5,6 +5,7 @@ import {
   TURN_STATE,
   createBlockingStatusStabilizer,
   getAggregateTurnState,
+  getDesktopLogTurnStates,
   getTurnState,
   hasLiveCodexApp,
   isWaitingOnUserEvent,
@@ -66,6 +67,39 @@ test('an active session wins over a newer completed session', () => {
       { turnState: TURN_STATE.ACTIVE },
     ]),
     TURN_STATE.ACTIVE,
+  );
+});
+
+test('tracks remote desktop turns from structural log lifecycle signals', () => {
+  const conversationId = '019f7392-475f-7d93-b0d6-c42e453fbe8b';
+  const states = getDesktopLogTurnStates([
+    `2026-07-18T23:36:40.012Z info response_routed conversationId=${conversationId} method=turn/start`,
+    `2026-07-18T23:39:22.238Z info Reasoning summary item completed threadId=${conversationId} summary=[redacted]`,
+  ]);
+
+  assert.equal(states.length, 1);
+  assert.equal(states[0].conversationId, conversationId);
+  assert.equal(states[0].turnState, TURN_STATE.ACTIVE);
+  assert.equal(states[0].timestamp, '2026-07-18T23:39:22.238Z');
+});
+
+test('remote turn completion supersedes its prior desktop activity', () => {
+  const conversationId = '019f7392-475f-7d93-b0d6-c42e453fbe8b';
+  const states = getDesktopLogTurnStates([
+    `2026-07-18T23:39:22.238Z info Reasoning summary item completed threadId=${conversationId}`,
+    `2026-07-18T23:41:26.448Z info [electron-message-handler] [desktop-notifications] show turn-complete conversationId=${conversationId}`,
+  ]);
+
+  assert.equal(states.length, 1);
+  assert.equal(states[0].turnState, TURN_STATE.COMPLETE);
+});
+
+test('ignores desktop log bodies without a lifecycle signal', () => {
+  assert.deepEqual(
+    getDesktopLogTurnStates([
+      '2026-07-18T23:39:22.238Z info arbitrary prompt and response text',
+    ]),
+    [],
   );
 });
 
